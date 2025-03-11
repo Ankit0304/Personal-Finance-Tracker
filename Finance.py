@@ -1,3 +1,5 @@
+# Necessary Libraries
+
 import datetime as dt
 import sqlite3
 from tkcalendar import DateEntry
@@ -7,19 +9,17 @@ import tkinter.ttk as ttk
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
 
-# database of projecct
 
+# database of projecct
 connection = sqlite3.connect("Finance.db")
 cursor = connection.cursor()
-
 connection.execute(
     'CREATE TABLE IF NOT EXISTS Finance (ID INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,Date DATETIME, Category TEXT, Description TEXT, Amount FLOAT, ModeOfPayment TEXT)'
 )
-
 connection.commit()
 
-# functions of projects
 
+# functions of projects
 def list_all_expenses():
     global connection, table
     try:
@@ -47,7 +47,6 @@ def view_expense_details():
     date.set_date(expenditure_date) ; category.set(values[2]) ; desc.set(values[3]) ; amnt.set(values[4]) ; MoP.set(values[5])
     update_total_transaction()
 
-    
 def clear_fields():
     global desc, category,amnt,MoP,date,table
     today_date = dt.datetime.now().date()
@@ -210,8 +209,7 @@ def update_total_transaction():
     except sqlite3.Error as e:
         mb.showerror('Database Error', f'An error occurred while updating the total transactions: {e}')
 
-
-# GUI Bckground code
+# GUI Bckground code using Tkinter
 
 DataEntry_Frame_bg = 'sky blue'
 button_frame_bg = 'light green'
@@ -233,6 +231,7 @@ amnt = DoubleVar()
 category = StringVar()
 MoP = StringVar(value='Cash')
 
+# Data Entry Frame design 
 data_entry_frame = Frame(root, bg=DataEntry_Frame_bg)
 data_entry_frame.place(x=0, y=30, relheight=0.95, relwidth=0.25)
 
@@ -266,7 +265,7 @@ Button(data_entry_frame, text='Add Expenses', command=add_another_expense, font=
 Button(data_entry_frame, text='Convert to words before adding',command=expense_to_words_before_adding, font=btn_font, width=30, bg=hlb_btn_bg).place(x=10, y=450)
 Button(data_entry_frame, text='Print Transactions (PDF)', font=btn_font, width=30, bg=hlb_btn_bg, command=generate_transaction_pdf).place(x=10, y=505)
 
-
+# Buttons Frame Design
 Button(button_frame, text='Delete Expense', font=btn_font, width=25, bg=hlb_btn_bg, command=remove_expense).place(x=30, y=5)
 
 Button(button_frame, text='Clear Fields in DataEntry Frame', font=btn_font, width=25, bg=hlb_btn_bg, command=clear_fields).place(x=335, y=5)
@@ -279,9 +278,7 @@ Button(button_frame, text='Edit Selected Expense', command=edit_expense, font=bt
 
 Button(button_frame, text='Convert Expenses to a Sentence', font=btn_font, width=25, bg=hlb_btn_bg, command=selected_expenses_to_words).place(x=640, y=65)
 
-
-
-
+# Tree Frame Design
 table = ttk.Treeview(tree_frame, selectmode=BROWSE, columns=('ID', 'Date', 'Category', 'Description', 'Amount', 'Mode of Payment'))
 
 X_Scroller = Scrollbar(tree_frame, orient=HORIZONTAL, command=table.xview)
@@ -308,10 +305,8 @@ table.column('#6', width=125, stretch=NO)
 
 table.place(relx=0, y=0, relheight=1, relwidth=1)
 
+
 list_all_expenses()
 update_total_transaction()
-
-
 root.update()
 root.mainloop()
-

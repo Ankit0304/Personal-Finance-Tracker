@@ -22,13 +22,17 @@ connection.commit()
 
 def list_all_expenses():
     global connection, table
-    table.delete(*table.get_children())
-    all_data = connection.execute('SELECT * FROM Finance')
-    data = all_data.fetchall()
-    
-    for values in data:
-        table.insert('', END, values=values)
-        
+    try:
+        table.delete(*table.get_children())
+        all_data = connection.execute('SELECT * FROM Finance')
+        data = all_data.fetchall()
+        update_total_transaction()
+
+        for values in data:
+            table.insert('', END, values=values)
+    except sqlite3.Error as e:
+        mb.showerror('Database Error', f'An error occurred while listing expenses: {e}')
+
 def view_expense_details():
     global table
     global date, category, desc, amnt,MoP
@@ -41,6 +45,8 @@ def view_expense_details():
     
     expenditure_date = dt.date(int(values[1][:4]), int(values[1][5:7]), int(values[1][8:]))
     date.set_date(expenditure_date) ; category.set(values[2]) ; desc.set(values[3]) ; amnt.set(values[4]) ; MoP.set(values[5])
+    update_total_transaction()
+
     
 def clear_fields():
     global desc, category,amnt,MoP,date,table
@@ -48,6 +54,7 @@ def clear_fields():
     
     desc.set('') ; category.set('') ; amnt.set(0.0) ; MoP.set('Cash') ; date.set_date(today_date)
     table.selection_remove(*table.selection())
+    update_total_transaction()
     
 def remove_expense():
     if not table.selection():
@@ -59,24 +66,29 @@ def remove_expense():
     surety = mb.askyesno('Are you Sure?', f'Are you sure that you want to delete the record of {values_selected[2]}')
     
     if surety:
-        connection.execute('DELETE FROM Finance WHERE ID=%d' % values_selected[0])
-        connection.commit()
-        list_all_expenses()
-        mb.showinfo('Record deleted successfully!', 'The record you wanted to delete has been deleted successfully!')
-        
+        try:
+            connection.execute('DELETE FROM Finance WHERE ID=?', (values_selected[0],))
+            connection.commit()
+            list_all_expenses()
+            update_total_transaction()
+            mb.showinfo('Record deleted successfully!', 'The record you wanted to delete has been deleted successfully!')
+        except sqlite3.Error as e:
+            mb.showerror('Database Error', f'An error occurred while deleting the expense: {e}')
+
 def remove_all_expenses():
-    surety = mb.askyesno('Are you sure?', 'Are sure that you want to delete all the expense item from the database?', icon='warning')
+    surety = mb.askyesno('Are you sure?', 'Are sure that you want to delete all the expense items from the database?', icon='warning')
     
     if surety:
-        table.delete(*table.get_children())
-        
-        connection.execute('DELETE FROM Finance')
-        connection.commit()
-        
-        clear_fields()
-        list_all_expenses()
-        mb.showinfo('All Expenses deleted', 'All the expenses were successfully deleted')
-    
+        try:
+            table.delete(*table.get_children())
+            connection.execute('DELETE FROM Finance')
+            connection.commit()
+            clear_fields()
+            list_all_expenses()
+            update_total_transaction()
+            mb.showinfo('All Expenses deleted', 'All the expenses were successfully deleted')
+        except sqlite3.Error as e:
+            mb.showerror('Database Error', f'An error occurred while deleting all expenses: {e}')
     else:
         mb.showinfo('Ok then', 'The task was aborted and no expense was deleted!')
         
@@ -85,15 +97,18 @@ def add_another_expense():
     global connection
     
     if not date.get() or not category.get() or not desc.get() or not amnt.get() or not MoP.get():
-        mb.showerror('Fields Empty!', 'Please fill all the missinng fileds before pressing the add button!')
+        mb.showerror('Fields Empty!', 'Please fill all the missing fields before pressing the add button!')
     else:
-        connection.execute('INSERT INTO finance(Date, Category, Description, Amount, ModeOfPayment) VALUES(?,?,?,?,?)',(dt.datetime.strptime(date.get(), "%m/%d/%y").strftime("%Y-%m-%d"),category.get(),desc.get(),amnt.get(),MoP.get())) 
-        
-        connection.commit()
-        
-        clear_fields()
-        list_all_expenses()
-        mb.showinfo('Expense added', 'The expense whose details you just entered has been added to the database')
+        try:
+            connection.execute('INSERT INTO finance(Date, Category, Description, Amount, ModeOfPayment) VALUES(?,?,?,?,?)',
+                               (dt.datetime.strptime(date.get(), "%m/%d/%y").strftime("%Y-%m-%d"), category.get(), desc.get(), amnt.get(), MoP.get()))
+            connection.commit()
+            clear_fields()
+            list_all_expenses()
+            update_total_transaction()
+            mb.showinfo('Expense added', 'The expense whose details you just entered has been added to the database')
+        except sqlite3.Error as e:
+            mb.showerror('Database Error', f'An error occurred while adding the expense: {e}')
 
 def edit_expense():
     global table
@@ -105,12 +120,16 @@ def edit_expense():
         current_selected_expense = table.item(table.focus())
         contents = current_selected_expense['values']
         
-        connection.execute('UPDATE Finance SET Date = ?, Category = ?, Description = ?, Amount = ?, ModeOfPayment = ? WHERE ID = ?', (dt.datetime.strptime(date.get(), "%m/%d/%y").strftime("%Y-%m-%d"), category.get(), desc.get(), amnt.get(), MoP.get(), contents[0]))
-        connection.commit()
-        
-        clear_fields()
-        list_all_expenses()
-        mb.showinfo('Data edited', 'We have updated the data and stored in the database as you wanted')
+        try:
+            connection.execute('UPDATE Finance SET Date = ?, Category = ?, Description = ?, Amount = ?, ModeOfPayment = ? WHERE ID = ?',
+                               (dt.datetime.strptime(date.get(), "%m/%d/%y").strftime("%Y-%m-%d"), category.get(), desc.get(), amnt.get(), MoP.get(), contents[0]))
+            connection.commit()
+            clear_fields()
+            list_all_expenses()
+            update_total_transaction()
+            mb.showinfo('Data edited', 'We have updated the data and stored it in the database as you wanted')
+        except sqlite3.Error as e:
+            mb.showerror('Database Error', f'An error occurred while editing the expense: {e}')
         
         edit_btn.destroy()
         return
@@ -154,32 +173,42 @@ def expense_to_words_before_adding():
         mb.showinfo('Ok', 'Please take your time to add this record')
 
 def generate_transaction_pdf():
-    all_data = connection.execute('SELECT * FROM Finance')
-    data = all_data.fetchall()
+    try:
+        all_data = connection.execute('SELECT * FROM Finance')
+        data = all_data.fetchall()
 
-    if not data:
-        mb.showinfo("No Transactions", "There are no transactions to print.")
-        return
+        if not data:
+            mb.showinfo("No Transactions", "There are no transactions to print.")
+            return
 
-    file_name = "Transactions.pdf"
-    c = canvas.Canvas(file_name, pagesize=letter)
-    c.setFont("Helvetica", 12)
+        file_name = "Transactions.pdf"
+        c = canvas.Canvas(file_name, pagesize=letter)
+        c.setFont("Helvetica", 12)
 
-    c.drawString(200, 750, "Personal Finance Tracker - Transactions Report")
-    c.drawString(50, 730, "--------------------------------------------------------")
+        c.drawString(200, 750, "Personal Finance Tracker - Transactions Report")
+        c.drawString(50, 730, "--------------------------------------------------------")
 
-    y_position = 710
-    for record in data:
-        transaction_text = f"ID: {record[0]}, Date: {record[1]}, Category: {record[2]}, Description: {record[3]}, Amount: {record[4]}, Mode: {record[5]}"
-        c.drawString(50, y_position, transaction_text)
-        y_position -= 20
-        if y_position < 50:  # Create a new page if needed
-            c.showPage()
-            c.setFont("Helvetica", 12)
-            y_position = 750
+        y_position = 710
+        for record in data:
+            transaction_text = f"ID: {record[0]}, Date: {record[1]}, Category: {record[2]}, Description: {record[3]}, Amount: {record[4]}, Mode: {record[5]}"
+            c.drawString(50, y_position, transaction_text)
+            y_position -= 20
+            if y_position < 50:  # Create a new page if needed
+                c.showPage()
+                c.setFont("Helvetica", 12)
 
-    c.save()
-    mb.showinfo("PDF Generated", f"Transactions saved as {file_name}")
+        c.save()
+        mb.showinfo("PDF Generated", f"Transactions saved as {file_name}")
+    except Exception as e:
+        mb.showerror('PDF Generation Error', f'An error occurred while generating the PDF: {e}')
+
+def update_total_transaction():
+    try:
+        total = connection.execute('SELECT SUM(Amount) FROM Finance').fetchone()[0]
+        total = total if total else 0  # If no transactions exist, set total to 0
+        total_amount_label.config(text=f"Total Transactions: ₹{total:.2f}")
+    except sqlite3.Error as e:
+        mb.showerror('Database Error', f'An error occurred while updating the total transactions: {e}')
 
 
 # GUI Bckground code
@@ -230,6 +259,9 @@ Label(data_entry_frame, text='Mode of Payment :', font=lbl_font, bg=DataEntry_Fr
 mop1 = OptionMenu(data_entry_frame, MoP, *['Cash', 'Cheque', 'Credit Card', 'Debit Card', 'PhonePe', 'Google Pay', 'Paytm', 'UPI'])
 mop1.place(x=160, y=305) ; mop1.configure(width=10, font=entry_font)
 
+total_amount_label = Label(data_entry_frame, text="Total Transactions: ₹0.00", font=lbl_font, bg=DataEntry_Frame_bg)
+total_amount_label.place(x=10, y=550)
+
 Button(data_entry_frame, text='Add Expenses', command=add_another_expense, font=btn_font, width=30, bg=hlb_btn_bg).place(x=10, y=395)
 Button(data_entry_frame, text='Convert to words before adding',command=expense_to_words_before_adding, font=btn_font, width=30, bg=hlb_btn_bg).place(x=10, y=450)
 Button(data_entry_frame, text='Print Transactions (PDF)', font=btn_font, width=30, bg=hlb_btn_bg, command=generate_transaction_pdf).place(x=10, y=505)
@@ -277,6 +309,7 @@ table.column('#6', width=125, stretch=NO)
 table.place(relx=0, y=0, relheight=1, relwidth=1)
 
 list_all_expenses()
+update_total_transaction()
 
 
 root.update()

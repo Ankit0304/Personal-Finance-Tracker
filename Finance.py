@@ -4,6 +4,8 @@ from tkcalendar import DateEntry
 from tkinter import *
 import tkinter.messagebox as mb
 import tkinter.ttk as ttk
+from reportlab.lib.pagesizes import letter
+from reportlab.pdfgen import canvas
 
 # database of projecct
 
@@ -151,12 +153,40 @@ def expense_to_words_before_adding():
     else:
         mb.showinfo('Ok', 'Please take your time to add this record')
 
+def generate_transaction_pdf():
+    all_data = connection.execute('SELECT * FROM Finance')
+    data = all_data.fetchall()
+
+    if not data:
+        mb.showinfo("No Transactions", "There are no transactions to print.")
+        return
+
+    file_name = "Transactions.pdf"
+    c = canvas.Canvas(file_name, pagesize=letter)
+    c.setFont("Helvetica", 12)
+
+    c.drawString(200, 750, "Personal Finance Tracker - Transactions Report")
+    c.drawString(50, 730, "--------------------------------------------------------")
+
+    y_position = 710
+    for record in data:
+        transaction_text = f"ID: {record[0]}, Date: {record[1]}, Category: {record[2]}, Description: {record[3]}, Amount: {record[4]}, Mode: {record[5]}"
+        c.drawString(50, y_position, transaction_text)
+        y_position -= 20
+        if y_position < 50:  # Create a new page if needed
+            c.showPage()
+            c.setFont("Helvetica", 12)
+            y_position = 750
+
+    c.save()
+    mb.showinfo("PDF Generated", f"Transactions saved as {file_name}")
+
 
 # GUI Bckground code
 
-DataEntry_Frame_bg = 'Red'
-button_frame_bg = 'Tomato'
-hlb_btn_bg = 'IndianRed'
+DataEntry_Frame_bg = 'sky blue'
+button_frame_bg = 'light green'
+hlb_btn_bg = 'Red'
 
 lbl_font = ('Georgia', 13 )
 entry_font = 'Times 13 bold'
@@ -167,7 +197,7 @@ root.title('Personal Finance Tracker')
 root.geometry('1200x700')
 root.resizable(0, 0)
 
-Label(root, text='Personal Finance Tracker', font=('Noto Sans CJK TC',15, 'bold'), bg=hlb_btn_bg).pack(side=TOP, fill=X)
+Label(root, text='Personal Finance Tracker', font=('Noto Sans CJK TC',16, 'bold'), bg=hlb_btn_bg).pack(side=TOP, fill=X)
 
 desc = StringVar()
 amnt = DoubleVar()
@@ -202,6 +232,7 @@ mop1.place(x=160, y=305) ; mop1.configure(width=10, font=entry_font)
 
 Button(data_entry_frame, text='Add Expenses', command=add_another_expense, font=btn_font, width=30, bg=hlb_btn_bg).place(x=10, y=395)
 Button(data_entry_frame, text='Convert to words before adding',command=expense_to_words_before_adding, font=btn_font, width=30, bg=hlb_btn_bg).place(x=10, y=450)
+Button(data_entry_frame, text='Print Transactions (PDF)', font=btn_font, width=30, bg=hlb_btn_bg, command=generate_transaction_pdf).place(x=10, y=505)
 
 
 Button(button_frame, text='Delete Expense', font=btn_font, width=25, bg=hlb_btn_bg, command=remove_expense).place(x=30, y=5)
@@ -215,6 +246,9 @@ Button(button_frame, text='View Selected Expense\'s Details', font=btn_font, wid
 Button(button_frame, text='Edit Selected Expense', command=edit_expense, font=btn_font, width=25,bg=hlb_btn_bg).place(x=335, y=65)
 
 Button(button_frame, text='Convert Expenses to a Sentence', font=btn_font, width=25, bg=hlb_btn_bg, command=selected_expenses_to_words).place(x=640, y=65)
+
+
+
 
 table = ttk.Treeview(tree_frame, selectmode=BROWSE, columns=('ID', 'Date', 'Category', 'Description', 'Amount', 'Mode of Payment'))
 
